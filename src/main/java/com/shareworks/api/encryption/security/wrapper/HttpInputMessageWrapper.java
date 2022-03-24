@@ -11,6 +11,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.shareworks.api.encryption.constant.SignSysConstant;
 import com.shareworks.api.encryption.contextholder.EncryptContextHolder;
+import com.shareworks.api.encryption.domain.UserApplication;
+import com.shareworks.api.encryption.domain.UserApplicationKeyInfo;
 import com.shareworks.api.encryption.dto.ApiSecurityRequestDTO;
 import com.shareworks.api.encryption.dto.TestRequestDTO;
 import com.shareworks.api.encryption.enums.EncryptionEnums;
@@ -25,6 +27,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -39,16 +42,11 @@ public class HttpInputMessageWrapper implements HttpInputMessage {
     /**
      * 验签key
      */
-    private String securityKey;
-    /**
-     * 验签类型
-     */
-    private EncryptionEnums encryptionType;
+    private UserApplication userApplication;
 
-    public HttpInputMessageWrapper(HttpInputMessage inputMessage, String securityKey, EncryptionEnums encryptionType) {
+    public HttpInputMessageWrapper(HttpInputMessage inputMessage, UserApplication userApplication) {
         this.inputMessage = inputMessage;
-        this.securityKey = securityKey;
-        this.encryptionType = encryptionType;
+        this.userApplication = userApplication;
         this.headers = inputMessage.getHeaders();
     }
 
@@ -85,6 +83,9 @@ public class HttpInputMessageWrapper implements HttpInputMessage {
     }
 
     private void verify(EncryptionEnums securityType, String requestSign, String securityBody) {
+        Map<String, String> securityKeyMap = userApplication.getUserApplicationKeyInfoList()
+                .stream()
+                .collect(Collectors.toMap(UserApplicationKeyInfo::getKeyType, UserApplicationKeyInfo::getKeyValue));
         String dataSign;
         switch (securityType) {
             case MD5:
@@ -94,7 +95,7 @@ public class HttpInputMessageWrapper implements HttpInputMessage {
                 }
                 break;
             case RSA:
-                Sign sign = SecureUtil.sign(SignAlgorithm.MD5withRSA, null, securityKey);
+                Sign sign = SecureUtil.sign(SignAlgorithm.MD5withRSA, null, securityKeyMap.get(securityType.name()));
                 if (!sign.verify(securityBody.getBytes(StandardCharsets.UTF_8), Base64.decode(requestSign))) {
                     throw new RuntimeException("RSA signature verification failed");
                 }

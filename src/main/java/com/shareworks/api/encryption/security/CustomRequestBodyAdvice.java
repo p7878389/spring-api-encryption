@@ -13,6 +13,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestBodyAdvice;
 import javax.annotation.Resource;
 import java.lang.reflect.Method;
 import java.lang.reflect.Type;
+import java.util.Objects;
 
 /**
  * @author martin.peng
@@ -27,14 +28,16 @@ public class CustomRequestBodyAdvice implements RequestBodyAdvice {
     @Override
     public boolean supports(MethodParameter methodParameter, Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
         Method method = methodParameter.getMethod();
-        return method.isAnnotationPresent(ApiSecurity.class);
+        ApiSecurity apiSecurity = method.getAnnotation(ApiSecurity.class);
+        if (Objects.isNull(apiSecurity)) {
+            return false;
+        }
+        return apiSecurity.requestSecurity();
     }
 
     @Override
     public HttpInputMessage beforeBodyRead(HttpInputMessage inputMessage, MethodParameter methodParameter, Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
-        Method method = methodParameter.getMethod();
-        ApiSecurity apiSecurity = method.getAnnotation(ApiSecurity.class);
-        return new HttpInputMessageWrapper(inputMessage, userApplicationService.getDefaultSecurityKey(), apiSecurity.securityType());
+        return new HttpInputMessageWrapper(inputMessage, userApplicationService.getDefaultSecurityKey());
     }
 
     @Override

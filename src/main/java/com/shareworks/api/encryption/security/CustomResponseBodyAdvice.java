@@ -26,6 +26,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 import javax.annotation.Resource;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
@@ -41,7 +42,11 @@ public class CustomResponseBodyAdvice implements ResponseBodyAdvice<BaseResponse
     @Override
     public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
         Method method = returnType.getMethod();
-        return method.isAnnotationPresent(ApiSecurity.class);
+        ApiSecurity apiSecurity = method.getAnnotation(ApiSecurity.class);
+        if (Objects.isNull(apiSecurity)) {
+            return false;
+        }
+        return apiSecurity.responseSecurity();
     }
 
     @SneakyThrows
