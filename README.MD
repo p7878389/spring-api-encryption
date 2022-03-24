@@ -1,9 +1,17 @@
+### spring接口验签
+
+- 通过重写**RequestBodyAdvice、ResponseBodyAdvice**来实现接口签名验签功能
+- 实现**HttpInputMessage**接口 重写**getBody**方法，在该方法中实现验签逻辑
+
+~~~java
 package com.shareworks.api.encryption.security.wrapper;
 
 import cn.hutool.core.codec.Base64;
 import cn.hutool.crypto.SecureUtil;
+import cn.hutool.crypto.asymmetric.RSA;
 import cn.hutool.crypto.asymmetric.Sign;
 import cn.hutool.crypto.asymmetric.SignAlgorithm;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -11,6 +19,8 @@ import com.shareworks.api.encryption.constant.SignSysConstant;
 import com.shareworks.api.encryption.contextholder.EncryptContextHolder;
 import com.shareworks.api.encryption.domain.UserApplication;
 import com.shareworks.api.encryption.domain.UserApplicationKeyInfo;
+import com.shareworks.api.encryption.dto.ApiSecurityRequestDTO;
+import com.shareworks.api.encryption.dto.TestRequestDTO;
 import com.shareworks.api.encryption.enums.EncryptionEnums;
 import lombok.Data;
 import org.apache.commons.io.IOUtils;
@@ -51,7 +61,7 @@ public class HttpInputMessageWrapper implements HttpInputMessage {
         InputStream input = inputMessage.getBody();
 
         //FIXME 1.参数解密处理
-        String body = IOUtils.toString(input, StandardCharsets.UTF_8);
+        String body = IOUtils.toString(input, "UTF-8");
 
         ObjectMapper objectMapper = new ObjectMapper();
         JsonNode jsonNode = objectMapper.readTree(body);
@@ -99,3 +109,59 @@ public class HttpInputMessageWrapper implements HttpInputMessage {
         }
     }
 }
+~~~
+
+- 实现**RequestBodyAdvice**、**ResponseBodyAdvice**两个类重写里面关键方法
+    - **RequestBodyAdvice**重写**supports**、**beforeBodyRead**方法
+    - **ResponseBodyAdvice**重写**supports**、**beforeBodyWrite**方法
+  > **supports**方法用于判断是否包含指定注解，请求或返回是否需要签名验签；
+  > **beforeBodyRead**用于request请求验签；**beforeBodyWrite**方法用于response签名
+
+    - **RequestBodyAdvice**重写关键方法
+  ~~~java
+    public boolean supports(MethodParameter methodParameter, Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
+        Method method = methodParameter.getMethod();
+        ApiSecurity apiSecurity = method.getAnnotation(ApiSecurity.class);
+        if (Objects.isNull(apiSecurity)) {
+            return false;
+        }
+        return apiSecurity.requestSecurity();
+    }
+
+    public HttpInputMessage beforeBodyRead(HttpInputMessage inputMessage, MethodParameter methodParameter, Type targetType, Class<? extends HttpMessageConverter<?>> converterType) {
+        return new HttpInputMessageWrapper(inputMessage, userApplicationService.getDefaultSecurityKey());
+    }
+  ~~~
+
+    - **ResponseBodyAdvice**重写关键方法
+  ~~~java
+    public boolean supports(MethodParameter returnType, Class<? extends HttpMessageConverter<?>> converterType) {
+        Method method = returnType.getMethod();
+        ApiSecurity apiSecurity = method.getAnnotation(ApiSecurity.class);
+        if (Objects.isNull(apiSecurity)) {
+            return false;
+        }
+        return apiSecurity.responseSecurity();
+    }
+
+    @SneakyThrows
+    public BaseResponseDTO<?> beforeBodyWrite(BaseResponseDTO<?> body, MethodParameter returnType, MediaType selectedContentType
+            , Class<? extends HttpMessageConverter<?>> selectedConverterType, ServerHttpRequest request, ServerHttpResponse response) {
+        long timestamp = System.currentTimeMillis();
+        ObjectMapper mapper = new ObjectMapper();
+
+        TreeMap<String, String> responseBodyMap = mapper.readValue(mapper.writeValueAsString(body), TreeMap.class);
+        responseBodyMap.put(SignSysConstant.DATA_KEY, mapper.writeValueAsString(body.getData()));
+        responseBodyMap.put(SignSysConstant.TIME_STAMP, String.valueOf(timestamp));
+        responseBodyMap.remove(SignSysConstant.SUCCESS_KEY);
+        responseBodyMap.remove(SignSysConstant.SIGN_KEY);
+        String signData = responseBodyMap.entrySet().stream()
+                .filter(entry -> !SignSysConstant.SIGN_KEY.equals(entry.getKey())
+                        && StringUtils.isNotBlank(entry.getValue()))
+                .map(entry -> entry.getKey() + "=" + entry.getValue()).collect(Collectors.joining(SignSysConstant.JOINER_KEY));
+        body.setSign(sign(signData, EncryptContextHolder.getInstance().get()));
+        body.setTimestamp(timestamp);
+        EncryptContextHolder.getInstance().remove();
+        return body;
+    }
+  ~~~
