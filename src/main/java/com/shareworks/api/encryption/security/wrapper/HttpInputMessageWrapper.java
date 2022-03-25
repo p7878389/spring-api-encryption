@@ -71,7 +71,7 @@ public class HttpInputMessageWrapper implements HttpInputMessage {
         Assert.notNull(securityType, "sign not null");
 
         String securityBody = bodyMap.entrySet().stream()
-                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .map(entry -> entry.getKey() + SignSysConstant.SIGN_FIELD_JOINER_KEY + entry.getValue())
                 .collect(Collectors.joining(SignSysConstant.JOINER_KEY));
         verify(encryptionEnums, requestSign, securityBody);
         EncryptContextHolder.getInstance().set(encryptionEnums);

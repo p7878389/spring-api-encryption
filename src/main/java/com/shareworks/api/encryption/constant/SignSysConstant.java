@@ -16,4 +16,6 @@ public interface SignSysConstant {
     String SECURITY_TYPE_KEY = "securityType";
 
     String TIME_STAMP = "timestamp";
+
+    String SIGN_FIELD_JOINER_KEY = "=";
 }

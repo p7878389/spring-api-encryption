@@ -64,7 +64,7 @@ public class CustomResponseBodyAdvice implements ResponseBodyAdvice<BaseResponse
         String signData = responseBodyMap.entrySet().stream()
                 .filter(entry -> !SignSysConstant.SIGN_KEY.equals(entry.getKey())
                         && StringUtils.isNotBlank(entry.getValue()))
-                .map(entry -> entry.getKey() + "=" + entry.getValue()).collect(Collectors.joining(SignSysConstant.JOINER_KEY));
+                .map(entry -> entry.getKey() + SignSysConstant.SIGN_FIELD_JOINER_KEY + entry.getValue()).collect(Collectors.joining(SignSysConstant.JOINER_KEY));
         body.setSign(sign(signData, EncryptContextHolder.getInstance().get()));
         body.setTimestamp(timestamp);
         EncryptContextHolder.getInstance().remove();
